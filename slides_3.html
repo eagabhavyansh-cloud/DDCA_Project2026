@@ -1,0 +1,668 @@
+<title>Binary-to-Decimal Display</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+
+  :root{
+    --bg:#0a0e18;
+    --bg-2:#0d1220;
+    --panel:#121828;
+    --panel-2:#182036;
+    --border:#242e46;
+    --border-soft:#1a2338;
+    --text:#e9edf7;
+    --text-dim:#9aa7c2;
+    --text-faint:#5c6a89;
+    --green:#3fdb9a;
+    --green-dim:#173c30;
+    --amber:#ff6a45;
+    --amber-dim:#3c1c14;
+    --amber-soft:#ffb199;
+    --font-mono:'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+    --font-sans:'IBM Plex Sans', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:var(--font-sans);
+    overflow:hidden;
+    height:100vh;
+    width:100vw;
+  }
+
+  .dotgrid{
+    background-image: radial-gradient(circle, #2a3654 1px, transparent 1px);
+    background-size: 26px 26px;
+  }
+
+  /* ---------- deck shell ---------- */
+  #deck{
+    position:relative;
+    height:100vh;
+    width:100vw;
+  }
+
+  .slide{
+    position:absolute;
+    inset:0;
+    display:none;
+    flex-direction:column;
+    padding: 64px 84px 56px;
+    background:var(--bg);
+  }
+  .slide.active{ display:flex; }
+
+  .slide.active .reveal{
+    animation: rise .6s cubic-bezier(.19,1,.22,1) both;
+  }
+  .slide.active .reveal:nth-child(1){animation-delay:.02s;}
+  .slide.active .reveal:nth-child(2){animation-delay:.09s;}
+  .slide.active .reveal:nth-child(3){animation-delay:.16s;}
+  .slide.active .reveal:nth-child(4){animation-delay:.23s;}
+  .slide.active .reveal:nth-child(5){animation-delay:.30s;}
+  .slide.active .reveal:nth-child(6){animation-delay:.37s;}
+  .slide.active .reveal:nth-child(7){animation-delay:.44s;}
+
+  @keyframes rise{
+    from{opacity:0; transform:translateY(18px);}
+    to{opacity:1; transform:translateY(0);}
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    .slide.active .reveal{ animation:none !important; }
+  }
+
+  /* ---------- chrome: header / footer / nav ---------- */
+  .kicker{
+    font-family:var(--font-mono);
+    font-size:13.5px;
+    letter-spacing:.16em;
+    text-transform:uppercase;
+    color:var(--green);
+    display:flex;
+    align-items:center;
+    gap:10px;
+    margin-bottom:16px;
+  }
+  .slide[data-num]::before{
+    content:attr(data-num);
+    position:absolute; top:40px; right:64px;
+    font-family:var(--font-mono); font-weight:700; font-size:230px; line-height:1;
+    color:rgba(255,255,255,.032); letter-spacing:-8px;
+    pointer-events:none; user-select:none;
+  }
+  .kicker .tag{
+    display:inline-flex; align-items:center; justify-content:center;
+    width:20px; height:20px; border:1.5px solid var(--green);
+    color:var(--green); font-size:11px; border-radius:3px;
+  }
+
+  h1.slide-title{
+    font-family:var(--font-mono);
+    font-weight:600;
+    font-size:42px;
+    letter-spacing:-.01em;
+    margin:0 0 8px;
+    text-wrap:balance;
+    color:var(--text);
+  }
+  h1.slide-title b{ color:var(--amber); font-weight:600; }
+
+  .subhead{
+    font-size:17px;
+    color:var(--text-dim);
+    margin:0 0 34px;
+    max-width:62ch;
+  }
+
+  #progress{
+    position:fixed; top:0; left:0; height:3px; background:var(--amber);
+    width:0%; z-index:50; transition:width .35s ease;
+  }
+
+  #hud{
+    position:fixed; bottom:22px; right:28px; display:flex; align-items:center; gap:14px;
+    font-family:var(--font-mono); font-size:12px; color:var(--text-faint);
+    z-index:40; font-variant-numeric: tabular-nums;
+  }
+  #hud .count b{color:var(--text-dim); font-weight:600;}
+  .navbtn{
+    width:34px; height:34px; border-radius:7px; border:1px solid var(--border);
+    background:var(--panel); color:var(--text-dim); cursor:pointer;
+    display:flex; align-items:center; justify-content:center; font-size:15px;
+    transition:.15s;
+  }
+  .navbtn:hover{ border-color:var(--green); color:var(--green); }
+
+  #dots{
+    position:fixed; bottom:22px; left:28px; display:flex; gap:7px; z-index:40;
+  }
+  #dots span{
+    width:6px; height:6px; border-radius:2px; background:var(--border);
+    cursor:pointer; transition:.2s;
+  }
+  #dots span.on{ background:var(--amber); width:18px; }
+
+  /* ---------- reusable bits ---------- */
+  .pin{
+    display:inline-flex; align-items:center; justify-content:center;
+    width:26px; height:26px; border:1.5px solid var(--green); border-radius:5px;
+    color:var(--green); font-family:var(--font-mono); font-size:13px; font-weight:600;
+    flex-shrink:0; background:var(--green-dim);
+  }
+  .pin.amber{ border-color:var(--amber); color:var(--amber-soft); background:var(--amber-dim); }
+
+  .card{
+    background:var(--panel); border:1px solid var(--border); border-radius:10px;
+    padding:24px 26px;
+  }
+
+  code, .mono{ font-family:var(--font-mono); }
+
+  ul.plain{ list-style:none; margin:0; padding:0; }
+
+  /* =================== SLIDE 1 — TITLE =================== */
+  #s1{ justify-content:center; align-items:flex-start; padding-left:88px; padding-right:88px; }
+  #s1 .eyebrow{
+    font-family:var(--font-mono); color:var(--green); letter-spacing:.2em; font-size:12.5px;
+    text-transform:uppercase; margin-bottom:26px;
+  }
+  #s1 h1{
+    font-family:var(--font-mono); font-weight:600; font-size:60px; line-height:1.16;
+    letter-spacing:-.015em; max-width:15ch; text-wrap:balance; margin:0 0 10px;
+    color:var(--text);
+  }
+  #s1 h1 .hl{ color:var(--amber); }
+  #s1 .desc{ color:var(--text-dim); font-size:19px; margin:22px 0 48px; max-width:58ch;}
+  #s1 .metarow{ display:flex; gap:64px; margin-bottom:42px; flex-wrap:wrap; }
+  #s1 .metarow .m label{ display:block; font-family:var(--font-mono); font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:var(--text-faint); margin-bottom:8px;}
+  #s1 .metarow .m span{ font-size:18px; color:var(--text); }
+  #s1 .team{ display:flex; flex-wrap:wrap; gap:12px; }
+  #s1 .chip{
+    display:flex; flex-direction:column; gap:4px;
+    border:1px solid var(--border); background:var(--panel); border-radius:9px;
+    padding:13px 18px;
+  }
+  #s1 .chip .nm{ font-size:15.5px; color:var(--text); font-weight:500; }
+  #s1 .chip .id{ font-family:var(--font-mono); font-size:12px; color:var(--text-faint); }
+
+  /* =================== SLIDE 2 — PROBLEM =================== */
+  #s2 .grid{ display:grid; grid-template-columns:1.15fr .85fr; gap:44px; flex:1; min-height:0; align-content:center; }
+  #s2 .lead{ font-size:19px; color:var(--text-dim); margin:0 0 30px; max-width:56ch; line-height:1.5; }
+  #s2 ol{ margin:0; padding:0; list-style:none; display:flex; flex-direction:column; gap:22px; }
+  #s2 ol li{ display:flex; gap:16px; align-items:flex-start; font-size:18px; color:var(--text); }
+  #s2 ol li .n{ font-family:var(--font-mono); color:var(--amber); font-size:14px; width:24px; flex-shrink:0; padding-top:3px;}
+  #s2 .examplecard{ display:flex; flex-direction:column; justify-content:center; align-items:center; gap:26px; height:100%; }
+  #s2 .examplecard .lbl{ font-family:var(--font-mono); font-size:12.5px; letter-spacing:.14em; text-transform:uppercase; color:var(--text-faint); }
+  #s2 .bits{ display:flex; gap:10px; }
+  #s2 .bit{
+    width:54px; height:66px; border:1.5px solid var(--green); border-radius:9px;
+    display:flex; align-items:center; justify-content:center; font-family:var(--font-mono);
+    font-size:27px; font-weight:600; color:var(--green); background:var(--green-dim);
+  }
+  #s2 .arrowdown{ color:var(--text-faint); font-size:24px; }
+  #s2 .digit{
+    width:78px; height:96px; border:1.5px solid var(--amber); border-radius:12px;
+    display:flex; align-items:center; justify-content:center; font-family:var(--font-mono);
+    font-size:46px; font-weight:700; color:var(--amber); background:var(--amber-dim);
+  }
+
+  /* =================== SLIDE 3 — OBJECTIVES =================== */
+  #s3 .objgrid{ display:grid; grid-template-columns:1fr 1fr; gap:22px 26px; flex:1; align-content:center; }
+  #s3 .obj{ display:flex; gap:18px; align-items:flex-start; background:var(--panel); border:1px solid var(--border); border-radius:11px; padding:24px 26px; }
+  #s3 .obj .txt b{ display:block; font-size:19px; color:var(--text); font-weight:600; margin-bottom:8px;}
+  #s3 .obj .txt span{ font-size:15px; color:var(--text-dim); line-height:1.55; }
+
+  /* =================== SLIDE 4 — SYSTEM OVERVIEW =================== */
+  #s4 .tracks{ display:grid; grid-template-columns:1fr 1fr; gap:40px; flex:1; min-height:0; align-content:center; }
+  #s4 .track{ display:flex; flex-direction:column; }
+  #s4 .track h3{
+    font-family:var(--font-mono); font-size:14px; letter-spacing:.12em; text-transform:uppercase;
+    margin:0 0 22px; padding-bottom:14px; border-bottom:1px solid var(--border-soft);
+    color:var(--text-dim); font-weight:600;
+  }
+  #s4 .steps{ display:flex; flex-direction:column; }
+  #s4 .step{ display:flex; align-items:center; gap:14px; padding:14px 0; position:relative; }
+  #s4 .step .dot{ width:11px; height:11px; border-radius:50%; background:var(--green); flex-shrink:0; }
+  #s4 .track.build .step .dot{ background:var(--amber); }
+  #s4 .step .lbl{ font-size:17px; color:var(--text); }
+  #s4 .connector{
+    width:1.5px; height:22px; background:var(--border); margin-left:5px;
+  }
+  #s4 .note{ margin-top:20px; display:flex; gap:14px; align-items:center; }
+  #s4 .note .badge{
+    font-family:var(--font-mono); font-size:20px; color:var(--text); background:var(--panel-2);
+    border:1px solid var(--border); padding:7px 12px; border-radius:8px; flex-shrink:0;
+  }
+  #s4 .note p{ margin:0; font-size:13px; color:var(--text-dim); }
+  #s4 .keypoint{
+    margin-top:28px; border-left:2px solid var(--amber); padding-left:18px; font-size:15.5px;
+    line-height:1.55; color:var(--text-dim); max-width:90ch;
+  }
+
+  /* =================== SLIDE 5 — TRUTH TABLE =================== */
+  #s5 .tt-wrap{ flex:1; display:flex; gap:48px; min-height:0; align-items:center; }
+  #s5 table{ border-collapse:collapse; font-family:var(--font-mono); font-size:16px; font-variant-numeric:tabular-nums; width:100%; }
+  #s5 th{ text-align:center; padding:10px 18px; color:var(--text-faint); font-weight:500; font-size:12px; letter-spacing:.1em; text-transform:uppercase; border-bottom:1px solid var(--border); }
+  #s5 td{ text-align:center; padding:9px 18px; color:var(--text-dim); border-bottom:1px solid var(--border-soft); }
+  #s5 tr.hex td{ color:var(--amber-soft); background:rgba(255,106,69,.06); }
+  #s5 tr.hex td.dec{ color:var(--amber); font-weight:600; }
+  #s5 td.dec{ color:var(--green); font-weight:600; }
+  #s5 .sidenote{ flex-shrink:0; width:340px; display:flex; flex-direction:column; gap:20px; justify-content:center; }
+  #s5 .sidenote .card{ font-size:16px; color:var(--text-dim); line-height:1.6; }
+  #s5 .sidenote .card b{ color:var(--amber-soft); }
+
+  /* =================== SLIDE 6 — METHODOLOGY =================== */
+  #s6 .m-wrap{ display:grid; grid-template-columns:.85fr 1.15fr; gap:48px; flex:1; min-height:0; align-content:center; }
+  #s6 .complist{ display:flex; flex-direction:column; gap:14px; }
+  #s6 .comp{ display:flex; gap:14px; align-items:center; background:var(--panel); border:1px solid var(--border); border-radius:9px; padding:18px 18px; }
+  #s6 .comp .qty{ font-family:var(--font-mono); color:var(--green); font-size:16px; width:30px; }
+  #s6 .comp .nm{ font-size:17px; color:var(--text); font-weight:500; }
+  #s6 .comp .src{ font-size:12.5px; color:var(--text-faint); margin-left:auto; }
+  #s6 .steplist{ display:flex; flex-direction:column; gap:17px; overflow-y:auto; padding-right:6px;}
+  #s6 .pstep{ display:flex; gap:14px; align-items:flex-start; font-size:16px; color:var(--text-dim); line-height:1.5; }
+  #s6 .pstep .n{ font-family:var(--font-mono); color:var(--amber); font-size:14px; flex-shrink:0; width:20px; padding-top:1px; }
+  #s6 .label-sm{ font-family:var(--font-mono); font-size:12.5px; letter-spacing:.12em; text-transform:uppercase; color:var(--text-faint); margin-bottom:14px; }
+
+  /* =================== SLIDE 7 — LOGIC INSIDE DISPLAY =================== */
+  #s7 .l-wrap{ display:grid; grid-template-columns:1fr 1fr; gap:52px; flex:1; min-height:0; align-content:center; align-items:center; }
+  #s7 .eqcard{ display:flex; flex-direction:column; gap:20px; }
+  #s7 .eq{ background:var(--panel); border:1px solid var(--border); border-radius:9px; padding:20px 22px; }
+  #s7 .eq .seg{ font-family:var(--font-mono); font-size:12.5px; color:var(--text-faint); letter-spacing:.08em; text-transform:uppercase; margin-bottom:9px;}
+  #s7 .eq .fx{ font-family:var(--font-mono); font-size:19px; color:var(--green); }
+  #s7 .l-copy p{ font-size:19px; color:var(--text-dim); line-height:1.65; margin:0 0 32px; }
+  #s7 .l-copy .callout{ background:var(--panel); border:1px solid var(--border); border-left:3px solid var(--amber); border-radius:9px; padding:22px 24px; font-size:17px; line-height:1.6; color:var(--text-dim); }
+
+  /* =================== SLIDE 8 — SIMULATION =================== */
+  #s8 .sim-wrap{ display:grid; grid-template-columns:1.1fr .9fr; gap:48px; flex:1; min-height:0; align-content:center; align-items:center; }
+  #s8 .shot{ background:#fff; border-radius:10px; border:1px solid var(--border); overflow:hidden; }
+  #s8 .shot img{ display:block; width:100%; height:auto; }
+  #s8 .complist2{ display:flex; flex-direction:column; gap:14px; margin-top:20px; }
+  #s8 .complist2 .row{ display:flex; gap:12px; font-size:15.5px; color:var(--text-dim); align-items:flex-start; }
+  #s8 table.tc{ border-collapse:collapse; font-family:var(--font-mono); font-size:16px; margin-top:14px; width:100%; }
+  #s8 table.tc th{ text-align:left; padding:9px 12px; color:var(--text-faint); font-size:12px; letter-spacing:.08em; text-transform:uppercase; border-bottom:1px solid var(--border); }
+  #s8 table.tc td{ padding:9px 12px; border-bottom:1px solid var(--border-soft); color:var(--text-dim); }
+  #s8 table.tc td.out{ color:var(--amber); font-weight:600; }
+
+  /* =================== SLIDE 9 — RESULTS =================== */
+  #s9 .r-wrap{ display:grid; grid-template-columns:1fr 1fr; gap:48px; flex:1; min-height:0; align-content:center; align-items:center; }
+  #s9 .checklist{ display:flex; flex-direction:column; gap:22px; }
+  #s9 .checklist li{ display:flex; gap:14px; align-items:flex-start; list-style:none; font-size:18px; color:var(--text); }
+  #s9 .checklist .ck{ color:var(--green); font-family:var(--font-mono); font-size:16px; flex-shrink:0; margin-top:1px; }
+  #s9 .vcard{ background:var(--panel); border:1px solid var(--border); border-radius:9px; padding:20px 22px; display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
+  #s9 .vcard .in{ font-family:var(--font-mono); font-size:16px; color:var(--text-dim); }
+  #s9 .vcard .out{ font-family:var(--font-mono); font-size:21px; color:var(--amber); font-weight:700; }
+  #s9 .vcard .note{ font-size:12.5px; color:var(--text-faint); max-width:22ch; text-align:right; }
+
+  /* =================== SLIDE 10 — GITHUB =================== */
+  #s10 .g-wrap{ display:grid; grid-template-columns:1fr 1fr; gap:48px; flex:1; min-height:0; align-content:center; align-items:center; }
+  #s10 .tree{
+    background:var(--panel-2); border:1px solid var(--border); border-radius:10px; padding:28px 28px;
+    font-family:var(--font-mono); font-size:15.5px; line-height:2.05; color:var(--text-dim); white-space:pre;
+    overflow:auto;
+  }
+  #s10 .tree .d{ color:var(--green); }
+  #s10 .readme li{ font-size:16px; color:var(--text-dim); padding:10px 0; border-bottom:1px solid var(--border-soft); list-style:none; }
+  #s10 .linkbox{ margin-top:22px; font-family:var(--font-mono); font-size:14px; color:var(--amber-soft); background:var(--amber-dim); border:1px dashed var(--amber); border-radius:8px; padding:14px 16px; }
+
+  /* =================== SLIDE 11 — CONCLUSION =================== */
+  #s11{ justify-content:center; }
+  #s11 .big{ font-family:var(--font-mono); font-size:36px; line-height:1.38; max-width:24ch; color:var(--text); margin:0 0 42px; text-wrap:balance; }
+  #s11 .big .hl{ color:var(--amber); }
+  #s11 .sumgrid{ display:grid; grid-template-columns:repeat(4,1fr); gap:20px; margin-bottom:42px; }
+  #s11 .sumgrid .card{ font-size:15px; color:var(--text-dim); line-height:1.5; padding:26px 24px; }
+  #s11 .sumgrid .card .pin{ display:flex; margin-bottom:14px; }
+  #s11 .thanks{ font-family:var(--font-mono); font-size:13px; letter-spacing:.14em; text-transform:uppercase; color:var(--text-faint); }
+</style>
+
+<div id="progress"></div>
+<div id="deck" class="dotgrid">
+
+  <!-- SLIDE 1 : TITLE -->
+  <section class="slide active" id="s1">
+    <div class="eyebrow reveal">DDCA &nbsp;·&nbsp; Digital Logic Project</div>
+    <h1 class="reveal">Design of a 4&#8209;Bit <span class="hl">Binary&#8209;to&#8209;Decimal</span> Conversion &amp; Display System Using Logic Gates</h1>
+    <p class="desc reveal">A combinational-logic system that reads a 4-bit binary value and displays its decimal — and, above 9, hexadecimal — equivalent on a digit display, designed and verified in Logisim.</p>
+    <div class="metarow reveal">
+      <div class="m"><label>Course</label><span>Digital Design &amp; Computer Architecture</span></div>
+      <div class="m"><label>Faculty</label><span>L R Rahul</span></div>
+      <div class="m"><label>Institution</label><span>KLH</span></div>
+    </div>
+    <div class="team reveal">
+      <div class="chip"><span class="nm">Guntaka Rishika</span><span class="id">2620030103</span></div>
+      <div class="chip"><span class="nm">Eaga Bhavyansh</span><span class="id">2620030142</span></div>
+      <div class="chip"><span class="nm">Keta Pravalika</span><span class="id">2620030144</span></div>
+      <div class="chip"><span class="nm">Kadiyam Jai Siva Sai Sri</span><span class="id">2620030145</span></div>
+    </div>
+  </section>
+
+  <!-- SLIDE 2 : PROBLEM STATEMENT -->
+  <section class="slide" id="s2" data-num="01">
+    <div class="kicker reveal"><span class="tag">01</span>Problem Statement</div>
+    <h1 class="slide-title reveal">What the system needs to do</h1>
+    <p class="subhead reveal">The core design problem this project solves.</p>
+    <div class="grid">
+      <div class="reveal" style="display:flex; flex-direction:column; justify-content:center; height:100%;">
+        <p class="lead">Design and implement a 4-bit binary-to-decimal conversion and display system using digital logic gates.</p>
+        <ol>
+          <li><span class="n">01</span>Accept a 4-bit binary input.</li>
+          <li><span class="n">02</span>Process the input using combinational logic.</li>
+          <li><span class="n">03</span>Convert the binary input into its corresponding decimal representation.</li>
+          <li><span class="n">04</span>Display the result on a digit display.</li>
+          <li><span class="n">05</span>Correctly handle all 16 possible 4-bit input combinations.</li>
+        </ol>
+      </div>
+      <div class="card examplecard reveal">
+        <div class="lbl">Example</div>
+        <div class="bits">
+          <div class="bit">0</div><div class="bit">1</div><div class="bit">0</div><div class="bit">1</div>
+        </div>
+        <div class="arrowdown">&#8595;</div>
+        <div class="digit">5</div>
+        <div class="lbl">Binary 0101&nbsp;&nbsp;&#8594;&nbsp;&nbsp;Decimal 5</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SLIDE 3 : OBJECTIVES -->
+  <section class="slide" id="s3" data-num="02">
+    <div class="kicker reveal"><span class="tag">02</span>Objectives</div>
+    <h1 class="slide-title reveal">What this project sets out to learn</h1>
+    <p class="subhead reveal">Six learning goals guiding the design and build.</p>
+    <div class="objgrid">
+      <div class="obj reveal"><span class="pin">1</span><div class="txt"><b>Binary&#8594;decimal conversion</b><span>How digital logic maps binary to decimal.</span></div></div>
+      <div class="obj reveal"><span class="pin">2</span><div class="txt"><b>Combinational design</b><span>Output depends only on current inputs.</span></div></div>
+      <div class="obj reveal"><span class="pin">3</span><div class="txt"><b>Boolean &#8594; gates</b><span>Boolean expressions realised as logic gates.</span></div></div>
+      <div class="obj reveal"><span class="pin">4</span><div class="txt"><b>Digit display decoding</b><span>How a 4-bit code drives a visible digit.</span></div></div>
+      <div class="obj reveal"><span class="pin">5</span><div class="txt"><b>K-map simplification</b><span>Minimising decoding logic with K-maps.</span></div></div>
+      <div class="obj reveal"><span class="pin">6</span><div class="txt"><b>Simulate &amp; verify</b><span>Build and test the circuit in Logisim.</span></div></div>
+    </div>
+  </section>
+
+  <!-- SLIDE 4 : SYSTEM OVERVIEW -->
+  <section class="slide" id="s4" data-num="03">
+    <div class="kicker reveal"><span class="tag">03</span>System Overview</div>
+    <h1 class="slide-title reveal">Theory, and what we actually built</h1>
+    <p class="subhead reveal">2<sup>4</sup> = 16 possible inputs, ranging from 0000 to 1111.</p>
+    <div class="tracks">
+      <div class="track reveal">
+        <h3>Theory — how a decoder is designed</h3>
+        <div class="steps">
+          <div class="step"><span class="dot"></span><span class="lbl">4-bit input &nbsp;A B C D</span></div>
+          <div class="connector"></div>
+          <div class="step"><span class="dot"></span><span class="lbl">Truth table &nbsp;(16 rows)</span></div>
+          <div class="connector"></div>
+          <div class="step"><span class="dot"></span><span class="lbl">Boolean expression per segment</span></div>
+          <div class="connector"></div>
+          <div class="step"><span class="dot"></span><span class="lbl">K-map simplification</span></div>
+          <div class="connector"></div>
+          <div class="step"><span class="dot"></span><span class="lbl">AND / OR / NOT gates</span></div>
+          <div class="connector"></div>
+          <div class="step"><span class="dot"></span><span class="lbl">Display segments light up</span></div>
+        </div>
+      </div>
+      <div class="track build reveal">
+        <h3>Our build — inside Logisim</h3>
+        <div class="steps">
+          <div class="step"><span class="dot"></span><span class="lbl">4 Input Pins &nbsp;A B C D</span></div>
+          <div class="connector"></div>
+          <div class="step"><span class="dot"></span><span class="lbl">Splitter &nbsp;(Fan Out 4, Width 4)</span></div>
+          <div class="connector"></div>
+          <div class="step"><span class="dot"></span><span class="lbl">Combined 4-bit bus</span></div>
+          <div class="connector"></div>
+          <div class="step"><span class="dot"></span><span class="lbl">Hex Digit Display</span></div>
+          <div class="connector"></div>
+          <div class="step"><span class="dot"></span><span class="lbl">Decimal (0–9) / Hex (A–F) shown</span></div>
+        </div>
+      </div>
+    </div>
+    <p class="keypoint reveal">Key point — the Hex Digit Display does this decoding internally. We use it as a verified, ready-made block instead of wiring ~20 gates by hand.</p>
+  </section>
+
+  <!-- SLIDE 5 : TRUTH TABLE -->
+  <section class="slide" id="s5" data-num="04">
+    <div class="kicker reveal"><span class="tag">04</span>Truth Table</div>
+    <h1 class="slide-title reveal">All 16 input combinations</h1>
+    <p class="subhead reveal">4-bit binary input and its decimal / displayed value.</p>
+    <div class="tt-wrap">
+      <table class="reveal" id="ttbody">
+        <thead><tr><th>A</th><th>B</th><th>C</th><th>D</th><th>Decimal</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <div class="sidenote reveal">
+        <div class="card">Rows <b>0–9</b> map directly to the ten decimal digits.</div>
+        <div class="card">Rows <b>10–15</b> show as hex <b>A–F</b> — we use a <b>single</b> Hex Digit Display, so two decimal digits aren't possible.</div>
+        <div class="card" style="text-align:center;">
+          <div style="font-family:var(--font-mono); font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--text-faint); margin-bottom:14px;">Worked example</div>
+          <div style="font-family:var(--font-mono); font-size:22px; color:var(--amber-soft);">1010&nbsp;&nbsp;&#8594;&nbsp;&nbsp;<b style="color:var(--amber);">A</b>&nbsp;&nbsp;(decimal 10)</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SLIDE 6 : METHODOLOGY -->
+  <section class="slide" id="s6" data-num="05">
+    <div class="kicker reveal"><span class="tag">05</span>Design &amp; Methodology</div>
+    <h1 class="slide-title reveal">How the circuit was built, step by step</h1>
+    <p class="subhead reveal">The exact procedure followed in Logisim.</p>
+    <div class="m-wrap">
+      <div class="reveal" style="display:flex; flex-direction:column; justify-content:center; height:100%;">
+        <div class="label-sm">Components used</div>
+        <div class="complist">
+          <div class="comp"><span class="qty">&times;4</span><span class="nm">Input Pin</span><span class="src">Wiring</span></div>
+          <div class="comp"><span class="qty">&times;1</span><span class="nm">Splitter</span><span class="src">Wiring</span></div>
+          <div class="comp"><span class="qty">&times;1</span><span class="nm">Hex Digit Display</span><span class="src">Input / Output</span></div>
+        </div>
+        <div class="card" style="margin-top:26px; font-size:14.5px; color:var(--text-dim); line-height:1.6;">Only <b style="color:var(--amber-soft)">3 components</b> total — the Hex Digit Display does all the decoding work internally.</div>
+      </div>
+      <div class="reveal">
+        <div class="label-sm">Procedure</div>
+        <div class="steplist">
+          <div class="pstep"><span class="n">1</span>Open Logisim, create a new circuit.</div>
+          <div class="pstep"><span class="n">2</span>Place 4 Input Pins vertically: A (MSB) at top, D (LSB) at bottom.</div>
+          <div class="pstep"><span class="n">3</span>Add a Splitter; set <b style="color:var(--text)">Fan Out = 4</b>, <b style="color:var(--text)">Bit Width In = 4</b>.</div>
+          <div class="pstep"><span class="n">4</span>Wire all 4 Input Pins to the Splitter's inputs.</div>
+          <div class="pstep"><span class="n">5</span>Place a Hex Digit Display.</div>
+          <div class="pstep"><span class="n">6</span>Wire the Splitter's output to the display.</div>
+          <div class="pstep"><span class="n">7</span>Save the circuit.</div>
+          <div class="pstep"><span class="n">8</span>Use the Poke Tool to toggle each pin 0 / 1.</div>
+          <div class="pstep"><span class="n">9</span>Observe: 0000–1001 &#8594; 0–9, 1010–1111 &#8594; A–F.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SLIDE 7 : LOGIC INSIDE THE DISPLAY -->
+  <section class="slide" id="s7" data-num="06">
+    <div class="kicker reveal"><span class="tag">06</span>Logic Gate Design</div>
+    <h1 class="slide-title reveal">The logic inside the display</h1>
+    <p class="subhead reveal">What the Hex Digit Display is doing on our behalf.</p>
+    <div class="l-wrap">
+      <div class="eqcard reveal">
+        <div class="eq"><div class="seg">Segment a</div><div class="fx">a&nbsp;=&nbsp;A + C + BD + B&prime;D&prime;</div></div>
+        <div class="eq"><div class="seg">Segment b</div><div class="fx">b&nbsp;=&nbsp;B&prime; + C&prime;D&prime; + CD</div></div>
+        <div class="eq"><div class="seg">Segments c–g</div><div class="fx">derived the same way, per segment</div></div>
+      </div>
+      <div class="l-copy reveal">
+        <p>A digit display lights segments <b style="color:var(--text)">a–g</b> based on A, B, C, D. Each segment is a Boolean function, found via a truth table and minimised with a K-map.</p>
+        <div class="callout">Our Hex Digit Display performs exactly this internally — extended to A–F — so we use it directly instead of ~20 hand-wired gates.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SLIDE 8 : LOGISIM SIMULATION -->
+  <section class="slide" id="s8" data-num="07">
+    <div class="kicker reveal"><span class="tag">07</span>Logisim Simulation</div>
+    <h1 class="slide-title reveal">The circuit, built and simulated</h1>
+    <p class="subhead reveal">Live view of the circuit in Logisim, all inputs at 0.</p>
+    <div class="sim-wrap">
+      <div class="reveal">
+        <div class="shot"><img src="data:image/png;base64,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" alt="Logisim circuit: four input pins feeding a splitter into a hex digit display"></div>
+      </div>
+      <div class="reveal">
+        <div class="label-sm">Circuit contains</div>
+        <div class="complist2">
+          <div class="row"><span class="pin">4</span>Input Pins, each togglable 0 / 1</div>
+          <div class="row"><span class="pin">1</span>Splitter (Fan Out 4, Width 4) merging the bits into one bus</div>
+          <div class="row"><span class="pin amber">1</span>Hex Digit Display showing the live result</div>
+        </div>
+        <div class="label-sm" style="margin-top:22px;">Test cases</div>
+        <table class="tc">
+          <thead><tr><th>Input</th><th>Output</th></tr></thead>
+          <tbody>
+            <tr><td>0000</td><td class="out">0</td></tr>
+            <tr><td>0011</td><td class="out">3</td></tr>
+            <tr><td>0101</td><td class="out">5</td></tr>
+            <tr><td>0111</td><td class="out">7</td></tr>
+            <tr><td>1001</td><td class="out">9</td></tr>
+            <tr><td>1010</td><td class="out">A</td></tr>
+            <tr><td>1111</td><td class="out">F</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- SLIDE 9 : RESULTS & VERIFICATION -->
+  <section class="slide" id="s9" data-num="08">
+    <div class="kicker reveal"><span class="tag">08</span>Results &amp; Verification</div>
+    <h1 class="slide-title reveal">It works, across every input</h1>
+    <p class="subhead reveal">Verified for all 16 combinations using the Poke Tool.</p>
+    <div class="r-wrap">
+      <ul class="checklist reveal">
+        <li><span class="ck">&#10003;</span>Accepts a 4-bit input from 4 switches</li>
+        <li><span class="ck">&#10003;</span>Combines the bits into one bus</li>
+        <li><span class="ck">&#10003;</span>Display decodes and shows the result</li>
+        <li><span class="ck">&#10003;</span>Shows 0–9 for inputs 0000–1001</li>
+        <li><span class="ck">&#10003;</span>Shows A–F for inputs 1010–1111</li>
+        <li><span class="ck">&#10003;</span>Verified across all 16 combinations</li>
+      </ul>
+      <div class="reveal">
+        <div class="vcard"><span class="in">0101</span><span class="out">5</span><span class="note">decimal, correct</span></div>
+        <div class="vcard"><span class="in">1001</span><span class="out">9</span><span class="note">decimal, correct</span></div>
+        <div class="vcard"><span class="in">1010</span><span class="out">A</span><span class="note">decimal 10, shown as hex</span></div>
+        <div class="vcard"><span class="in">1111</span><span class="out">F</span><span class="note">decimal 15, shown as hex</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SLIDE 10 : GITHUB REPOSITORY -->
+  <section class="slide" id="s10" data-num="09">
+    <div class="kicker reveal"><span class="tag">09</span>Repository</div>
+    <h1 class="slide-title reveal">Project repository</h1>
+    <p class="subhead reveal">Everything organised for submission and reuse.</p>
+    <div class="g-wrap">
+      <div class="tree reveal">4-bit-Binary-to-Decimal-Display/
+├── README.md
+├── <span class="d">Logisim/</span>
+│   └── binary_to_hex_display.circ
+├── <span class="d">Documentation/</span>
+│   ├── Problem_Statement.pdf
+│   ├── Methodology.pdf
+│   └── Truth_Table.pdf
+├── <span class="d">Images/</span>
+│   └── Logisim_Circuit.png
+└── <span class="d">Demo/</span>
+    └── Demo_Video_Link.txt</div>
+      <div class="reveal">
+        <div class="label-sm">README contains</div>
+        <ul class="readme plain">
+          <li>Project overview &amp; problem statement</li>
+          <li>Objectives</li>
+          <li>Methodology</li>
+          <li>Circuit diagram &amp; truth table</li>
+          <li>Logisim simulation &amp; results</li>
+          <li>Team members</li>
+          <li>Demo video</li>
+        </ul>
+        <div class="linkbox">GitHub Link: [Add your repository link here]</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SLIDE 11 : CONCLUSION -->
+  <section class="slide" id="s11" data-num="10">
+    <div class="kicker reveal"><span class="tag">10</span>Conclusion</div>
+    <p class="big reveal">A 4-bit binary value, converted and displayed as its <span class="hl">decimal</span> — or <span class="hl">hexadecimal</span> — equivalent, using combinational logic verified end-to-end in Logisim.</p>
+    <div class="sumgrid">
+      <div class="card reveal"><span class="pin">1</span>Built with Input Pins, a Splitter, and a Hex Digit Display.</div>
+      <div class="card reveal"><span class="pin">2</span>The display runs the same decoding logic studied in our objectives.</div>
+      <div class="card reveal"><span class="pin">3</span>Covers the full workflow: problem &#8594; truth table &#8594; simulation.</div>
+      <div class="card reveal"><span class="pin">4</span>Verified correct across all 16 possible inputs.</div>
+    </div>
+    <div class="thanks reveal">Thank you — Guntaka Rishika &middot; Eaga Bhavyansh &middot; Keta Pravalika &middot; Kadiyam Jai Siva Sai Sri</div>
+  </section>
+
+</div>
+
+<div id="dots"></div>
+<div id="hud">
+  <button class="navbtn" id="prev" aria-label="Previous slide">&#8592;</button>
+  <span class="count"><b id="cur">01</b> / <span id="tot">11</span></span>
+  <button class="navbtn" id="next" aria-label="Next slide">&#8594;</button>
+</div>
+
+<script>
+(function(){
+  var slides = Array.prototype.slice.call(document.querySelectorAll('.slide'));
+  var total = slides.length;
+  var idx = 0;
+
+  // build truth table rows
+  var tbody = document.querySelector('#ttbody tbody');
+  var hexChars = ['A','B','C','D','E','F'];
+  for (var i = 0; i < 16; i++){
+    var bits = i.toString(2).padStart(4,'0').split('');
+    var tr = document.createElement('tr');
+    if (i >= 10) tr.className = 'hex';
+    var decLabel = i >= 10 ? (i + ' &#8594; ' + hexChars[i-10]) : i;
+    tr.innerHTML = '<td>'+bits[0]+'</td><td>'+bits[1]+'</td><td>'+bits[2]+'</td><td>'+bits[3]+'</td><td class="dec">'+decLabel+'</td>';
+    tbody.appendChild(tr);
+  }
+
+  // dots
+  var dotsWrap = document.getElementById('dots');
+  for (var d = 0; d < total; d++){
+    var s = document.createElement('span');
+    s.dataset.i = d;
+    dotsWrap.appendChild(s);
+  }
+  var dots = Array.prototype.slice.call(dotsWrap.children);
+
+  var totEl = document.getElementById('tot');
+  totEl.textContent = String(total).padStart(2,'0');
+
+  function render(){
+    slides.forEach(function(sl, i){ sl.classList.toggle('active', i === idx); });
+    dots.forEach(function(dot, i){ dot.classList.toggle('on', i === idx); });
+    document.getElementById('cur').textContent = String(idx+1).padStart(2,'0');
+    document.getElementById('progress').style.width = ((idx+1)/total*100) + '%';
+  }
+  function go(n){ idx = Math.max(0, Math.min(total-1, n)); render(); }
+
+  document.getElementById('next').addEventListener('click', function(){ go(idx+1); });
+  document.getElementById('prev').addEventListener('click', function(){ go(idx-1); });
+  dots.forEach(function(dot){ dot.addEventListener('click', function(){ go(+dot.dataset.i); }); });
+
+  document.addEventListener('keydown', function(e){
+    if (['ArrowRight','ArrowDown','PageDown',' '].indexOf(e.key) > -1){ e.preventDefault(); go(idx+1); }
+    else if (['ArrowLeft','ArrowUp','PageUp'].indexOf(e.key) > -1){ e.preventDefault(); go(idx-1); }
+    else if (e.key === 'Home'){ go(0); }
+    else if (e.key === 'End'){ go(total-1); }
+  });
+
+  // basic swipe support
+  var touchX = null;
+  document.addEventListener('touchstart', function(e){ touchX = e.touches[0].clientX; }, {passive:true});
+  document.addEventListener('touchend', function(e){
+    if (touchX === null) return;
+    var dx = e.changedTouches[0].clientX - touchX;
+    if (Math.abs(dx) > 50){ dx < 0 ? go(idx+1) : go(idx-1); }
+    touchX = null;
+  }, {passive:true});
+
+  render();
+})();
+</script>
